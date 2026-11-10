@@ -1,0 +1,250 @@
+{
+  "name": "EUR to EGP Rate Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [0, 176],
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://getdaleelak.com/api/v1/feed.json?asset=euro",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [224, 176],
+      "name": "Fetch EUR-EGP Rate"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst feed = $input.first().json;\n\n// Find the EUR-EGP asset\nconst asset = feed.assets?.find(\n  item => item.id === \"EUR-EGP\" && item.slug === \"euro\"\n);\n\nif (!asset) {\n  throw new Error(\"EUR-EGP asset not found in API response\");\n}\n\n// Extract the best rates for both directions\nconst sell = asset.directions?.sell?.best;\nconst buy = asset.directions?.buy?.best;\n\n// Validate the returned rates\nif (\n  typeof sell?.value !== \"number\" ||\n  typeof buy?.value !== \"number\"\n) {\n  throw new Error(\"Invalid EUR-EGP exchange rate values\");\n}\n\n// Validate observation metadata\nif (!asset.asOf || !asset.observedAt) {\n  throw new Error(\"Missing exchange rate observation metadata\");\n}\n\n// Return a clean data object\nreturn [\n  {\n    json: {\n      currencyPair: asset.id,\n      unit: asset.unit,\n\n      // You sell EUR to a bank\n      youSellEurRate: sell.value,\n      youSellEurBank: sell.seller,\n\n      // You buy EUR from a bank\n      youBuyEurRate: buy.value,\n      youBuyEurBank: buy.seller,\n\n      // Additional market references\n      officialBuyBenchmark: asset.benchmark?.buy,\n      officialSellBenchmark: asset.benchmark?.sell,\n      globalRate: asset.global?.value,\n\n      // Data quality\n      asOf: asset.asOf,\n      observedAt: asset.observedAt,\n      freshness: asset.freshness?.state,\n      isStale: asset.freshness?.stale,\n      confidence: asset.confidence?.level,\n      providers: asset.confidence?.providers,\n\n      // Source attribution\n      source: \"Daleelak\",\n      sourceUrl: \"https://getdaleelak.com/en/api\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 176],
+      "name": "Extract & Validate EUR-EGP"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "EUR_EGP_Rate_State",
+          "cachedResultUrl": "/projects/REPLACE_AFTER_IMPORT/datatables/REPLACE_WITH_DATA_TABLE_ID"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "currencyPair",
+              "keyValue": "EUR-EGP"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [672, 176],
+      "name": "Get Previous EUR-EGP Rates"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst current = $('Extract & Validate EUR-EGP').first().json;\nconst previous = $input.first().json;\n\n// Validate saved baseline\nif (\n  previous.currencyPair !== \"EUR-EGP\" ||\n  typeof previous.youSellEurRate !== \"number\" ||\n  typeof previous.youBuyEurRate !== \"number\"\n) {\n  throw new Error(\"Invalid or missing previous EUR-EGP rates\");\n}\n\n// Calculate differences\nconst sellDifference = Number(\n  (current.youSellEurRate - previous.youSellEurRate).toFixed(2)\n);\n\nconst buyDifference = Number(\n  (current.youBuyEurRate - previous.youBuyEurRate).toFixed(2)\n);\n\n// Detect changes\nconst sellChanged = sellDifference !== 0;\nconst buyChanged = buyDifference !== 0;\n\nconst rateChanged = sellChanged || buyChanged;\n\n// Only allow notifications for fresh data\nconst isFresh =\n  current.freshness === \"fresh\" &&\n  current.isStale === false;\n\nconst shouldNotify = rateChanged && isFresh;\n\n// Return comparison results\nreturn [\n  {\n    json: {\n      ...current,\n\n      previousSellRate: previous.youSellEurRate,\n      previousBuyRate: previous.youBuyEurRate,\n\n      sellDifference,\n      buyDifference,\n\n      sellChanged,\n      buyChanged,\n      rateChanged,\n\n      shouldNotify,\n\n      decisionReason: !isFresh\n        ? \"Data is not fresh\"\n        : rateChanged\n          ? \"Exchange rate changed\"\n          : \"No exchange rate change\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [896, 176],
+      "name": "Compare EUR-EGP Rates"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.shouldNotify }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [1120, 176],
+      "name": "Rate Changed?"
+    },
+    {
+      "parameters": {
+        "model": "openrouter/free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1416, 152],
+      "name": "OpenRouter Chat Model"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an exchange-rate market update assistant.\n\nAnalyze the following validated EUR-EGP exchange-rate data.\n\nCurrency pair: {{ $json.currencyPair }}\n\nPrevious rate when selling EUR: {{ $json.previousSellRate }}\nCurrent rate when selling EUR: {{ $json.youSellEurRate }}\nChange: {{ $json.sellDifference }}\n\nPrevious rate when buying EUR: {{ $json.previousBuyRate }}\nCurrent rate when buying EUR: {{ $json.youBuyEurRate }}\nChange: {{ $json.buyDifference }}\n\nBest bank buying EUR: {{ $json.youSellEurBank }}\nBest bank selling EUR: {{ $json.youBuyEurBank }}\n\nOfficial buy benchmark: {{ $json.officialBuyBenchmark }}\nOfficial sell benchmark: {{ $json.officialSellBenchmark }}\n\nObservation date: {{ $json.asOf }}\nData freshness: {{ $json.freshness }}\n\nInstructions:\n\n1. Explain the exchange-rate movement in simple English.\n2. Mention only the rates that changed.\n3. Clearly explain whether EUR became more or less expensive in EGP.\n4. Mention the relevant bank and its rate.\n5. Keep the response under 80 words.\n6. Do not invent values, calculate new exchange rates, predict future movements, or give financial advice.\n7. State that rates are indicative.",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "IMPORTANT RATE DIRECTION RULES:  \n- When the customer sells EUR, use only youSellEurRate and youSellEurBank.\n- When the customer buys EUR, use only youBuyEurRate and youBuyEurBank.\n- Never interchange the two banks or rates. \n- Describe rates from the customer's perspective. \n- A falling EGP/EUR rate means EUR is cheaper in EGP. \n- A rising EGP/EUR rate means EUR is more expensive in EGP. \n- Mention only the directions that changed. \n- Never invent bank names or rates."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [1344, -80],
+      "name": "Generate AI Rate Analysis"
+    },
+    {
+      "parameters": {
+        "chatId": "REPLACE_WITH_TELEGRAM_CHAT_ID",
+        "text": "={{\n'📊 EUR → EGP RATE UPDATE\\n\\n' +\n\n'📅 Date: ' +\n$('Compare EUR-EGP Rates').first().json.asOf +\n\n'\\n\\n💶 WHEN YOU SELL EUR\\n' +\n$('Compare EUR-EGP Rates').first().json.youSellEurRate.toFixed(2) +\n' EGP\\nBank: ' +\n$('Compare EUR-EGP Rates').first().json.youSellEurBank +\n\n'\\nPrevious: ' +\n$('Compare EUR-EGP Rates').first().json.previousSellRate.toFixed(2) +\n' EGP\\nChange: ' +\n($('Compare EUR-EGP Rates').first().json.sellDifference > 0 ? '+' : '') +\n$('Compare EUR-EGP Rates').first().json.sellDifference.toFixed(2) +\n' EGP' +\n\n'\\n\\n💶 WHEN YOU BUY EUR\\n' +\n$('Compare EUR-EGP Rates').first().json.youBuyEurRate.toFixed(2) +\n' EGP\\nBank: ' +\n$('Compare EUR-EGP Rates').first().json.youBuyEurBank +\n\n'\\nPrevious: ' +\n$('Compare EUR-EGP Rates').first().json.previousBuyRate.toFixed(2) +\n' EGP\\nChange: ' +\n($('Compare EUR-EGP Rates').first().json.buyDifference > 0 ? '+' : '') +\n$('Compare EUR-EGP Rates').first().json.buyDifference.toFixed(2) +\n' EGP' +\n\n'\\n\\n🤖 AI ANALYSIS\\n' +\n(\n  $('Generate AI Rate Analysis').first().json.text ||\n  'AI summary unavailable for this run.'\n) +\n\n'\\n\\n⚠️ Indicative rates only. Confirm with the bank.' +\n'\\nSource: https://getdaleelak.com/en/api'\n}}\n",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1696, 32],
+      "name": "Send EUR-EGP Telegram Alert"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "EUR_EGP_Rate_State",
+          "cachedResultUrl": "/projects/REPLACE_AFTER_IMPORT/datatables/REPLACE_WITH_DATA_TABLE_ID"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "currencyPair",
+              "keyValue": "EUR-EGP"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "youSellEurRate": "={{ $('Compare EUR-EGP Rates').first().json.youSellEurRate }}",
+            "youBuyEurRate": "={{ $('Compare EUR-EGP Rates').first().json.youBuyEurRate }}",
+            "currencyPair": "EUR-EGP"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "currencyPair",
+              "displayName": "currencyPair",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "youSellEurRate",
+              "displayName": "youSellEurRate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "youBuyEurRate",
+              "displayName": "youBuyEurRate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [1920, 32],
+      "name": "Update EUR-EGP Baseline"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1408, 320],
+      "name": "No Rate Change - End"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {"main": [[{"node": "Fetch EUR-EGP Rate", "type": "main", "index": 0}]]},
+    "Fetch EUR-EGP Rate": {"main": [[{"node": "Extract & Validate EUR-EGP", "type": "main", "index": 0}]]},
+    "Extract & Validate EUR-EGP": {"main": [[{"node": "Get Previous EUR-EGP Rates", "type": "main", "index": 0}]]},
+    "Get Previous EUR-EGP Rates": {"main": [[{"node": "Compare EUR-EGP Rates", "type": "main", "index": 0}]]},
+    "Compare EUR-EGP Rates": {"main": [[{"node": "Rate Changed?", "type": "main", "index": 0}]]},
+    "Rate Changed?": {
+      "main": [
+        [{"node": "Generate AI Rate Analysis", "type": "main", "index": 0}],
+        [{"node": "No Rate Change - End", "type": "main", "index": 0}]
+      ]
+    },
+    "OpenRouter Chat Model": {"ai_languageModel": [[{"node": "Generate AI Rate Analysis", "type": "ai_languageModel", "index": 0}]]},
+    "Generate AI Rate Analysis": {"main": [[{"node": "Send EUR-EGP Telegram Alert", "type": "main", "index": 0}]]},
+    "Send EUR-EGP Telegram Alert": {"main": [[{"node": "Update EUR-EGP Baseline", "type": "main", "index": 0}]]}
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Cairo",
+    "executionTimeout": 180
+  }
+}
