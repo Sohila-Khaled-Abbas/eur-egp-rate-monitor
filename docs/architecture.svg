@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="750" viewBox="0 0 1440 750" role="img" aria-labelledby="title desc">
+<title id="title">EUR to EGP Rate Monitor workflow architecture</title>
+<desc id="desc">A five-minute schedule fetches the Daleelak EUR feed, validates and normalizes it, reads the previous rates from an n8n Data Table, then compares freshness and changes. Fresh changes go through AI analysis, Telegram delivery and baseline update. Unchanged or stale data ends without a notification.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#f7f6f3"/><stop offset="1" stop-color="#ebe9e4"/></linearGradient>
+  <linearGradient id="accent" x1="0" x2="1"><stop offset="0" stop-color="#e76f91"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#27272a" flood-opacity=".12"/></filter>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#64748b"/></marker>
+  <style>
+    .h{font:700 28px Inter,Arial,sans-serif;fill:#292524}.sub{font:400 15px Inter,Arial,sans-serif;fill:#78716c}
+    .n{font:700 17px Inter,Arial,sans-serif;fill:#292524}.d{font:400 13px Inter,Arial,sans-serif;fill:#57534e}
+    .tag{font:700 12px Inter,Arial,sans-serif;fill:#7c3aed;letter-spacing:1px}.line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}
+    .box{fill:#fff;stroke:#ddd6ce;stroke-width:1.3;rx:16;filter:url(#shadow)}
+    .small{font:600 12px Inter,Arial,sans-serif;fill:#475569}.branch{font:700 12px Inter,Arial,sans-serif;fill:#047857}
+  </style>
+</defs>
+<rect x="0" y="0" width="1440" height="750" rx="24" fill="url(#bg)"/>
+<text x="56" y="58" class="tag">N8N · EVENT-DRIVEN NOTIFICATION FLOW</text>
+<text x="56" y="98" class="h">EUR → EGP Rate Monitor</text>
+<text x="56" y="127" class="sub">Five-minute polling · freshness-aware comparison · AI explanation · Telegram alert</text>
+<g>
+ <rect x="55" y="190" width="180" height="112" class="box"/><text x="76" y="220" class="tag">01 · SCHEDULE</text><text x="76" y="251" class="n">Schedule Trigger</text><text x="76" y="278" class="d">Every 5 minutes</text>
+ <rect x="285" y="190" width="190" height="112" class="box"/><text x="306" y="220" class="tag">02 · INGEST</text><text x="306" y="251" class="n">Fetch EUR-EGP</text><text x="306" y="278" class="d">Daleelak JSON feed</text>
+ <rect x="525" y="190" width="210" height="112" class="box"/><text x="546" y="220" class="tag">03 · VALIDATE</text><text x="546" y="251" class="n">Extract &amp; Validate</text><text x="546" y="278" class="d">Type + metadata checks</text>
+ <rect x="785" y="190" width="205" height="112" class="box"/><text x="806" y="220" class="tag">04 · STATE</text><text x="806" y="251" class="n">Get Previous Rates</text><text x="806" y="278" class="d">n8n Data Table</text>
+ <rect x="1040" y="190" width="190" height="112" class="box"/><text x="1061" y="220" class="tag">05 · COMPARE</text><text x="1061" y="251" class="n">Compare Rates</text><text x="1061" y="278" class="d">Change + freshness</text>
+ <path d="M235 246 H285 M475 246 H525 M735 246 H785 M990 246 H1040" class="line"/>
+</g>
+<path d="M1135 302 V365" class="line"/>
+<path d="M1135 365 L1210 420 L1135 475 L1060 420 Z" fill="#fff" stroke="#c4b5fd" stroke-width="2" filter="url(#shadow)"/>
+<text x="1135" y="416" text-anchor="middle" class="n">Rate</text><text x="1135" y="438" text-anchor="middle" class="n">Changed?</text>
+<path d="M1210 420 H1285 V520" class="line"/>
+<text x="1240" y="405" class="branch">TRUE · fresh change</text>
+<rect x="1140" y="535" width="250" height="70" rx="14" class="box"/><text x="1160" y="563" class="tag">06 · EXPLAIN</text><text x="1160" y="588" class="n">AI Rate Analysis</text>
+<path d="M1265 605 V635" class="line"/>
+<rect x="1140" y="642" width="250" height="70" rx="14" class="box"/><text x="1160" y="670" class="tag">07 · DELIVER</text><text x="1160" y="695" class="n">Telegram Alert</text>
+<path d="M1140 677 H1010 V690" class="line"/>
+<rect x="780" y="642" width="230" height="70" rx="14" class="box"/><text x="800" y="670" class="tag">08 · COMMIT</text><text x="800" y="695" class="n">Update Baseline</text>
+<path d="M1060 420 H900 V520" class="line"/>
+<text x="930" y="402" class="small">FALSE · unchanged / stale</text>
+<rect x="760" y="535" width="250" height="70" rx="14" fill="#f0fdf4" stroke="#86efac" stroke-width="1.4" filter="url(#shadow)"/><text x="780" y="563" class="tag" style="fill:#15803d">NO ALERT</text><text x="780" y="588" class="n">No Rate Change · End</text>
+<text x="56" y="690" class="sub">Baseline advances only after Telegram delivery succeeds. Stale or unchanged observations do not notify.</text>
+</svg>
